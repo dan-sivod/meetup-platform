@@ -12,8 +12,32 @@ import org.springframework.data.jpa.repository.Query
 import java.time.Instant
 import java.util.UUID
 
-enum class FriendshipStatus { PENDING, ACCEPTED, DECLINED, BLOCKED }
+/** Состояние связи между двумя пользователями. */
+enum class FriendshipStatus {
+    /** Заявка отправлена и ждёт ответа адресата. */
+    PENDING,
 
+    /** Заявка принята — пользователи друзья. */
+    ACCEPTED,
+
+    /** Заявка отклонена. */
+    DECLINED,
+
+    /** Инициатор заблокировал адресата: новые заявки невозможны. */
+    BLOCKED,
+}
+
+/**
+ * Ребро графа дружбы — направленная запись «кто кого позвал».
+ * Для принятой дружбы связь считается симметричной.
+ *
+ * @property id идентификатор записи.
+ * @property requesterId инициатор заявки (или блокировки).
+ * @property addresseeId адресат заявки.
+ * @property status текущее состояние связи.
+ * @property createdAt момент создания заявки.
+ * @property respondedAt момент ответа адресата; null, пока заявка в ожидании.
+ */
 @Entity
 @Table(
     name = "friendships",
@@ -33,7 +57,9 @@ class Friendship(
     var respondedAt: Instant? = null,
 )
 
+/** Репозиторий связей графа дружбы. */
 interface FriendshipRepository : JpaRepository<Friendship, UUID> {
+    /** Возвращает все записи между пользователями [a] и [b] независимо от направления. */
     @Query(
         """
         select f from Friendship f
@@ -43,6 +69,7 @@ interface FriendshipRepository : JpaRepository<Friendship, UUID> {
     )
     fun findBetween(a: UUID, b: UUID): List<Friendship>
 
+    /** Возвращает все принятые дружбы пользователя [userId] в обоих направлениях. */
     @Query(
         """
         select f from Friendship f
@@ -52,5 +79,6 @@ interface FriendshipRepository : JpaRepository<Friendship, UUID> {
     )
     fun findAcceptedFor(userId: UUID): List<Friendship>
 
+    /** Возвращает записи, адресованные пользователю, в заданном статусе (например, входящие заявки). */
     fun findByAddresseeIdAndStatus(addresseeId: UUID, status: FriendshipStatus): List<Friendship>
 }

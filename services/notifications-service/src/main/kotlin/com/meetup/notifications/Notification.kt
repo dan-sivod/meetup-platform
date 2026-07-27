@@ -8,6 +8,18 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * In-app уведомление пользователя.
+ *
+ * @property id идентификатор уведомления.
+ * @property userId адресат уведомления.
+ * @property type машиночитаемый тип (meetup_invite, friend_request...) для маршрутизации в UI.
+ * @property title заголовок, показываемый пользователю.
+ * @property body развёрнутый текст; может отсутствовать.
+ * @property refId идентификатор связанной сущности (встречи, заявки...) для deep-link.
+ * @property read прочитано ли уведомление.
+ * @property createdAt момент создания.
+ */
 @Entity
 @Table(name = "notifications")
 class Notification(
@@ -20,13 +32,16 @@ class Notification(
     @Column(nullable = false)
     val title: String,
     val body: String? = null,
-    /** Id of the related entity (meetup, friendship, ...) for deep links. */
     val refId: UUID? = null,
     var read: Boolean = false,
     val createdAt: Instant = Instant.now(),
 )
 
+/** Репозиторий уведомлений. */
 interface NotificationRepository : JpaRepository<Notification, UUID> {
+    /** Все уведомления пользователя, новые первыми. */
     fun findByUserIdOrderByCreatedAtDesc(userId: UUID): List<Notification>
+
+    /** Непрочитанные уведомления пользователя. */
     fun findByUserIdAndReadFalse(userId: UUID): List<Notification>
 }

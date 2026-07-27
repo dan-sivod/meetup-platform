@@ -10,12 +10,34 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Instant
 import java.util.UUID
 
-enum class Visibility { PUBLIC, FRIENDS_ONLY, PRIVATE }
+/** Кому виден профиль пользователя. */
+enum class Visibility {
+    /** Виден всем пользователям платформы. */
+    PUBLIC,
 
+    /** Виден только друзьям (по умолчанию). */
+    FRIENDS_ONLY,
+
+    /** Скрыт от всех, кроме владельца. */
+    PRIVATE,
+}
+
+/**
+ * Публичный профиль пользователя. Учётные данные (пароль) хранятся
+ * отдельно в auth-service.
+ *
+ * @property id идентификатор пользователя — тот же, что и в auth-service.
+ * @property email адрес почты (копия из события регистрации).
+ * @property displayName отображаемое имя.
+ * @property bio краткое описание «о себе»; может отсутствовать.
+ * @property avatarUrl ссылка на аватар; может отсутствовать.
+ * @property timezone часовой пояс IANA (например, "America/New_York") для отображения времени встреч.
+ * @property visibility настройка приватности профиля.
+ * @property createdAt момент создания профиля.
+ */
 @Entity
 @Table(name = "user_profiles")
 class UserProfile(
-    /** Same id as in auth-service — the platform-wide user id. */
     @Id
     val id: UUID,
     @Column(nullable = false)
@@ -30,4 +52,5 @@ class UserProfile(
     val createdAt: Instant = Instant.now(),
 )
 
+/** Репозиторий профилей пользователей. */
 interface UserProfileRepository : JpaRepository<UserProfile, UUID>

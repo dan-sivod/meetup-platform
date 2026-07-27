@@ -9,6 +9,18 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Место для встречи: кафе, парк, квартира и т.п.
+ *
+ * @property id идентификатор места.
+ * @property name название места.
+ * @property category категория (кафе, бар, парк...); может отсутствовать.
+ * @property address человекочитаемый адрес; может отсутствовать.
+ * @property latitude широта в градусах.
+ * @property longitude долгота в градусах.
+ * @property createdBy пользователь, добавивший место в каталог.
+ * @property createdAt момент добавления.
+ */
 @Entity
 @Table(name = "places")
 class Place(
@@ -26,6 +38,15 @@ class Place(
     val createdAt: Instant = Instant.now(),
 )
 
+/**
+ * Отметка «избранное»: пользователь сохранил место себе.
+ * Пара (место, пользователь) уникальна.
+ *
+ * @property id идентификатор отметки.
+ * @property placeId избранное место.
+ * @property userId владелец отметки.
+ * @property createdAt момент добавления в избранное.
+ */
 @Entity
 @Table(
     name = "place_favorites",
@@ -41,9 +62,14 @@ class PlaceFavorite(
     val createdAt: Instant = Instant.now(),
 )
 
+/** Репозиторий каталога мест. */
 interface PlaceRepository : JpaRepository<Place, UUID>
 
+/** Репозиторий отметок «избранное». */
 interface PlaceFavoriteRepository : JpaRepository<PlaceFavorite, UUID> {
+    /** Все избранные места пользователя. */
     fun findByUserId(userId: UUID): List<PlaceFavorite>
+
+    /** Проверяет, есть ли место в избранном у пользователя. */
     fun existsByPlaceIdAndUserId(placeId: UUID, userId: UUID): Boolean
 }

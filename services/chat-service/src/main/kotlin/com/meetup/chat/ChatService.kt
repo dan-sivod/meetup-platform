@@ -12,6 +12,15 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
+/**
+ * Логика чата: создание комнат по событиям встреч и отправка сообщений
+ * с realtime-рассылкой подписчикам.
+ *
+ * @property rooms репозиторий комнат.
+ * @property messages репозиторий сообщений.
+ * @property kafka продюсер события message.sent.
+ * @property broker STOMP-брокер для рассылки сообщений подписчикам комнаты.
+ */
 @Service
 class ChatService(
     private val rooms: ChatRoomRepository,
@@ -19,9 +28,13 @@ class ChatService(
     private val kafka: KafkaTemplate<String, Any>,
     private val broker: SimpMessagingTemplate,
 ) {
+    /** Логгер компонента. */
     private val log = LoggerFactory.getLogger(javaClass)
 
-    /** Every meetup automatically gets its own chat room. */
+    /**
+     * Создаёт комнату для новой встречи по событию meetup.created.
+     * Идемпотентен: повторная доставка события не создаёт дубликат.
+     */
     @KafkaListener(topics = [Topics.MEETUP_CREATED])
     fun onMeetupCreated(event: MeetupCreated) {
         if (rooms.findByMeetupId(event.meetupId) != null) return
@@ -29,6 +42,15 @@ class ChatService(
         log.info("Created chat room {} for meetup {}", room.id, event.meetupId)
     }
 
+    /**
+     * Сохраняет сообщение, рассылает его подписчикам комнаты через
+     * /topic/rooms/{roomId} и публикует message.sent в Kafka.
+     *
+     * @param roomId комната назначения.
+     * @param senderId автор сообщения.
+     * @param text текст сообщения.
+     * @throws ResponseStatusException 404, если комната не найдена.
+     */
     fun postMessage(roomId: UUID, senderId: UUID, text: String): ChatMessage {
         val room = rooms.findById(roomId).orElseThrow {
             ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found")

@@ -16,10 +16,31 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Тело запроса на создание опроса.
+ *
+ * @property meetupId встреча, для которой выбирается время.
+ * @property options предлагаемые временные слоты.
+ */
 data class CreatePollRequest(val meetupId: UUID, val options: List<SlotOption>) {
+    /**
+     * Предлагаемый слот.
+     *
+     * @property startsAt начало слота (UTC).
+     * @property endsAt конец слота; может отсутствовать.
+     */
     data class SlotOption(val startsAt: Instant, val endsAt: Instant? = null)
 }
 
+/**
+ * Результат голосования по одному слоту.
+ *
+ * @property optionId идентификатор слота.
+ * @property startsAt начало слота.
+ * @property endsAt конец слота; может отсутствовать.
+ * @property votes количество голосов.
+ * @property voterIds кто проголосовал за этот слот.
+ */
 data class OptionResult(
     val optionId: UUID,
     val startsAt: Instant,
@@ -28,6 +49,15 @@ data class OptionResult(
     val voterIds: List<UUID>,
 )
 
+/**
+ * Сводные результаты опроса.
+ *
+ * @property pollId идентификатор опроса.
+ * @property meetupId встреча, для которой проводится опрос.
+ * @property status открыт или закрыт.
+ * @property selectedOptionId победивший слот; null, пока опрос открыт.
+ * @property options результаты по слотам, отсортированные по числу голосов.
+ */
 data class PollResults(
     val pollId: UUID,
     val meetupId: UUID,
@@ -36,6 +66,14 @@ data class PollResults(
     val options: List<OptionResult>,
 )
 
+/**
+ * HTTP-эндпоинты опросов по выбору времени: создание, голосование,
+ * отзыв голоса, закрытие с фиксацией победителя.
+ *
+ * @property polls репозиторий опросов.
+ * @property options репозиторий слотов.
+ * @property votes репозиторий голосов.
+ */
 @RestController
 @RequestMapping("/polls")
 class PollController(
@@ -43,6 +81,11 @@ class PollController(
     private val options: PollOptionRepository,
     private val votes: PollVoteRepository,
 ) {
+    /**
+     * Создаёт опрос с набором слотов.
+     *
+     * @throws ResponseStatusException 400, если не передано ни одного слота.
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
@@ -59,6 +102,13 @@ class PollController(
         return results(poll.id)
     }
 
+    /**
+     * Голос текущего пользователя за слот. Идемпотентен: повторный голос
+     * за тот же слот не меняет результат.
+     *
+     * @throws ResponseStatusException 404 — слот не найден;
+     * 400 — слот принадлежит другому опросу; 409 — опрос закрыт.
+     */
     @PostMapping("/{pollId}/options/{optionId}/votes")
     fun vote(
         @PathVariable pollId: UUID,
@@ -78,6 +128,7 @@ class PollController(
         return results(pollId)
     }
 
+    /** Отзывает голос текущего пользователя за слот (пока опрос открыт). */
     @DeleteMapping("/{pollId}/options/{optionId}/votes")
     @Transactional
     fun unvote(
@@ -90,6 +141,13 @@ class PollController(
         return results(pollId)
     }
 
+    /**
+     * Закрывает опрос и фиксирует слот с максимумом голосов.
+     * Доступно только автору опроса.
+     *
+     * @throws ResponseStatusException 403 — закрывает не автор;
+     * 409 — опрос уже закрыт или не содержит слотов.
+     */
     @PostMapping("/{pollId}/close")
     fun close(@PathVariable pollId: UUID, @RequestHeader("X-User-Id") userId: UUID): PollResults {
         val poll = findOpen(pollId)
@@ -104,13 +162,20 @@ class PollController(
         return results(pollId)
     }
 
+    /** Текущие результаты опроса. */
     @GetMapping("/{pollId}")
     fun get(@PathVariable pollId: UUID): PollResults = results(pollId)
 
+    /** Все опросы встречи с результатами. */
     @GetMapping
     fun byMeetup(@RequestParam meetupId: UUID): List<PollResults> =
         polls.findByMeetupId(meetupId).map { results(it.id) }
 
+    /**
+     * Возвращает опрос, убедившись, что он открыт.
+     *
+     * @throws ResponseStatusException 404 — опрос не найден; 409 — закрыт.
+     */
     private fun findOpen(pollId: UUID): Poll {
         val poll = polls.findById(pollId).orElseThrow {
             ResponseStatusException(HttpStatus.NOT_FOUND, "Poll not found")
@@ -121,6 +186,7 @@ class PollController(
         return poll
     }
 
+    /** Собирает сводные результаты: голоса группируются по слотам одним запросом. */
     private fun results(pollId: UUID): PollResults {
         val poll = polls.findById(pollId).orElseThrow {
             ResponseStatusException(HttpStatus.NOT_FOUND, "Poll not found")

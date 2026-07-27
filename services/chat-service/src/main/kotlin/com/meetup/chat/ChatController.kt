@@ -17,11 +17,28 @@ import org.springframework.web.server.ResponseStatusException
 import org.springframework.stereotype.Controller
 import java.util.UUID
 
+/**
+ * Тело REST-запроса на отправку сообщения.
+ *
+ * @property text текст сообщения.
+ */
 data class SendMessageRequest(val text: String)
 
-/** Payload for messages arriving over the WebSocket (STOMP) channel. */
+/**
+ * Сообщение, приходящее по WebSocket (STOMP).
+ *
+ * @property senderId автор сообщения (в проде берётся из JWT при handshake).
+ * @property text текст сообщения.
+ */
 data class WsMessage(val senderId: UUID, val text: String)
 
+/**
+ * REST-эндпоинты чата: поиск комнаты по встрече, отправка и история.
+ *
+ * @property chatService логика отправки сообщений.
+ * @property rooms репозиторий комнат.
+ * @property messages репозиторий сообщений.
+ */
 @RestController
 @RequestMapping("/chat")
 class ChatController(
@@ -29,11 +46,17 @@ class ChatController(
     private val rooms: ChatRoomRepository,
     private val messages: ChatMessageRepository,
 ) {
+    /**
+     * Возвращает комнату встречи.
+     *
+     * @throws ResponseStatusException 404, если комната ещё не создана.
+     */
     @GetMapping("/rooms/by-meetup/{meetupId}")
     fun roomByMeetup(@PathVariable meetupId: UUID): ChatRoom =
         rooms.findByMeetupId(meetupId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found")
 
+    /** Отправляет сообщение от текущего пользователя через REST. */
     @PostMapping("/rooms/{roomId}/messages")
     fun send(
         @PathVariable roomId: UUID,
@@ -41,6 +64,7 @@ class ChatController(
         @RequestBody request: SendMessageRequest,
     ): ChatMessage = chatService.postMessage(roomId, userId, request.text)
 
+    /** История комнаты: последние [limit] сообщений (1–200), новые первыми. */
     @GetMapping("/rooms/{roomId}/messages")
     fun history(
         @PathVariable roomId: UUID,
@@ -49,9 +73,14 @@ class ChatController(
         messages.findByRoomIdOrderBySentAtDesc(roomId, PageRequest.of(0, limit.coerceIn(1, 200)))
 }
 
+/**
+ * WebSocket-обработчик входящих сообщений.
+ *
+ * @property chatService логика отправки сообщений.
+ */
 @Controller
 class ChatWsController(private val chatService: ChatService) {
-    /** Client sends to /app/rooms/{roomId}; broadcast goes to /topic/rooms/{roomId}. */
+    /** Клиент шлёт в /app/rooms/{roomId}; рассылка идёт в /topic/rooms/{roomId}. */
     @MessageMapping("/rooms/{roomId}")
     fun onWsMessage(@DestinationVariable roomId: UUID, @Payload message: WsMessage) {
         chatService.postMessage(roomId, message.senderId, message.text)

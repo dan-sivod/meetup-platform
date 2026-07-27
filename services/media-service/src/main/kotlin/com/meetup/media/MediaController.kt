@@ -21,8 +21,13 @@ import java.nio.file.Path
 import java.util.UUID
 
 /**
- * Local filesystem storage for development. In production this service issues
- * presigned S3 URLs instead of proxying bytes through the JVM.
+ * HTTP-эндпоинты альбомов встреч: загрузка, список, скачивание.
+ *
+ * Для разработки байты хранятся на локальном диске; в продакшене сервис
+ * выдаёт presigned-ссылки S3, не пропуская содержимое через JVM.
+ *
+ * @property assets репозиторий метаданных файлов.
+ * @param storageDir каталог хранения файлов из конфигурации.
  */
 @RestController
 @RequestMapping("/media")
@@ -30,12 +35,18 @@ class MediaController(
     private val assets: MediaAssetRepository,
     @Value("\${media.storage-dir}") storageDir: String,
 ) {
+    /** Абсолютный корень каталога хранения; создаётся при старте. */
     private val root: Path = Path.of(storageDir).toAbsolutePath()
 
     init {
         Files.createDirectories(root)
     }
 
+    /**
+     * Загружает файл в альбом встречи [meetupId] от имени текущего пользователя.
+     *
+     * @throws ResponseStatusException 400, если файл пустой.
+     */
     @PostMapping("/meetups/{meetupId}")
     @ResponseStatus(HttpStatus.CREATED)
     fun upload(
@@ -62,10 +73,17 @@ class MediaController(
         )
     }
 
+    /** Альбом встречи: метаданные файлов от новых к старым. */
     @GetMapping("/meetups/{meetupId}")
     fun album(@PathVariable meetupId: UUID): List<MediaAsset> =
         assets.findByMeetupIdOrderByUploadedAtDesc(meetupId)
 
+    /**
+     * Отдаёт содержимое файла с корректным Content-Type.
+     *
+     * @throws ResponseStatusException 404 — метаданные не найдены;
+     * 410 — файл пропал из хранилища.
+     */
     @GetMapping("/{assetId}/content")
     fun download(@PathVariable assetId: UUID): ResponseEntity<Resource> {
         val asset = assets.findById(assetId).orElseThrow {

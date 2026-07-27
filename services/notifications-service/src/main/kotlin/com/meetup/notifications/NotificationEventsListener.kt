@@ -13,27 +13,33 @@ import org.springframework.stereotype.Component
 import java.util.UUID
 
 /**
- * Projects domain events into per-user in-app notifications.
- * Push/email channels would plug in here as additional delivery adapters.
+ * Проецирует доменные события в персональные in-app уведомления.
+ * Push и email подключаются здесь же как дополнительные каналы доставки.
+ *
+ * @property notifications репозиторий уведомлений.
  */
 @Component
 class NotificationEventsListener(private val notifications: NotificationRepository) {
 
+    /** Приветственное уведомление новому пользователю. */
     @KafkaListener(topics = [Topics.USER_REGISTERED])
     fun onUserRegistered(event: UserRegistered) {
         save(event.userId, "welcome", "Добро пожаловать в Meetup!", "Найдите друзей и создайте первую встречу.")
     }
 
+    /** Уведомляет адресата о новой заявке в друзья. */
     @KafkaListener(topics = [Topics.FRIENDSHIP_REQUESTED])
     fun onFriendshipRequested(event: FriendshipRequested) {
         save(event.addresseeId, "friend_request", "Новая заявка в друзья", refId = event.friendshipId)
     }
 
+    /** Уведомляет автора заявки, что её приняли. */
     @KafkaListener(topics = [Topics.FRIENDSHIP_ACCEPTED])
     fun onFriendshipAccepted(event: FriendshipAccepted) {
         save(event.requesterId, "friend_accepted", "Заявка в друзья принята", refId = event.friendshipId)
     }
 
+    /** Рассылает приглашения всем позванным на новую встречу. */
     @KafkaListener(topics = [Topics.MEETUP_CREATED])
     fun onMeetupCreated(event: MeetupCreated) {
         event.invitedUserIds.forEach {
@@ -41,6 +47,7 @@ class NotificationEventsListener(private val notifications: NotificationReposito
         }
     }
 
+    /** Сообщает участникам подтверждённое время встречи. */
     @KafkaListener(topics = [Topics.MEETUP_CONFIRMED])
     fun onMeetupConfirmed(event: MeetupConfirmed) {
         event.participantIds.forEach {
@@ -54,6 +61,7 @@ class NotificationEventsListener(private val notifications: NotificationReposito
         }
     }
 
+    /** Сообщает участникам (кроме организатора) об отмене встречи. */
     @KafkaListener(topics = [Topics.MEETUP_CANCELLED])
     fun onMeetupCancelled(event: MeetupCancelled) {
         event.participantIds.filter { it != event.hostId }.forEach {
@@ -61,6 +69,7 @@ class NotificationEventsListener(private val notifications: NotificationReposito
         }
     }
 
+    /** Сообщает организатору об изменении ответа участника. */
     @KafkaListener(topics = [Topics.RSVP_CHANGED])
     fun onRsvpChanged(event: RsvpChanged) {
         if (event.userId == event.hostId) return
@@ -72,6 +81,7 @@ class NotificationEventsListener(private val notifications: NotificationReposito
         )
     }
 
+    /** Сохраняет уведомление адресату [userId]. */
     private fun save(userId: UUID, type: String, title: String, body: String? = null, refId: UUID? = null) {
         notifications.save(Notification(userId = userId, type = type, title = title, body = body, refId = refId))
     }

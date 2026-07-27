@@ -7,10 +7,16 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+/**
+ * HTTP-эндпоинты рекомендаций.
+ *
+ * @property service скоринговая логика рекомендаций.
+ */
 @RestController
 @RequestMapping("/recommendations")
 class RecommendationController(private val service: RecommendationService) {
 
+    /** Топ рекомендованных мест для текущего пользователя (limit ограничен 1–50). */
     @GetMapping("/places")
     fun places(
         @RequestHeader("X-User-Id") userId: UUID,

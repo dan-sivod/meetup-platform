@@ -12,10 +12,46 @@ import org.springframework.data.jpa.repository.Query
 import java.time.Instant
 import java.util.UUID
 
-enum class MeetupStatus { PLANNED, CONFIRMED, CANCELLED }
+/** Жизненный цикл встречи. */
+enum class MeetupStatus {
+    /** Встреча создана, время и место ещё обсуждаются. */
+    PLANNED,
 
-enum class RsvpStatus { INVITED, GOING, MAYBE, DECLINED }
+    /** Организатор зафиксировал время (и, возможно, место). */
+    CONFIRMED,
 
+    /** Встреча отменена; дальнейшие изменения запрещены. */
+    CANCELLED,
+}
+
+/** Ответ участника на приглашение (RSVP). */
+enum class RsvpStatus {
+    /** Приглашён, но ещё не ответил. */
+    INVITED,
+
+    /** Придёт. */
+    GOING,
+
+    /** Возможно придёт. */
+    MAYBE,
+
+    /** Не придёт. */
+    DECLINED,
+}
+
+/**
+ * Агрегат «встреча». Ссылается на место и участников по UUID —
+ * данные мест и профилей живут в своих сервисах.
+ *
+ * @property id идентификатор встречи.
+ * @property hostId организатор; только он может приглашать, подтверждать и отменять.
+ * @property title название встречи.
+ * @property description описание; может отсутствовать.
+ * @property status текущий статус жизненного цикла.
+ * @property startsAt время начала (UTC); null, пока встреча не подтверждена.
+ * @property placeId выбранное место из places-service; null, если не выбрано.
+ * @property createdAt момент создания встречи.
+ */
 @Entity
 @Table(name = "meetups")
 class Meetup(
@@ -34,6 +70,15 @@ class Meetup(
     val createdAt: Instant = Instant.now(),
 )
 
+/**
+ * Участие пользователя во встрече и его текущий ответ.
+ *
+ * @property id идентификатор записи об участии.
+ * @property meetupId встреча, к которой относится запись.
+ * @property userId приглашённый пользователь.
+ * @property rsvp текущий ответ на приглашение.
+ * @property respondedAt момент последнего ответа; null, если ответа ещё не было.
+ */
 @Entity
 @Table(
     name = "participants",
@@ -52,7 +97,12 @@ class Participant(
     var respondedAt: Instant? = null,
 )
 
+/** Репозиторий встреч. */
 interface MeetupRepository : JpaRepository<Meetup, UUID> {
+    /**
+     * Лента пользователя: неотменённые встречи, где он организатор
+     * или участник, отсортированные по времени начала.
+     */
     @Query(
         """
         select m from Meetup m
@@ -66,8 +116,14 @@ interface MeetupRepository : JpaRepository<Meetup, UUID> {
     fun findFeedFor(userId: UUID): List<Meetup>
 }
 
+/** Репозиторий записей об участии. */
 interface ParticipantRepository : JpaRepository<Participant, UUID> {
+    /** Все участники встречи. */
     fun findByMeetupId(meetupId: UUID): List<Participant>
+
+    /** Запись об участии конкретного пользователя; null, если он не приглашён. */
     fun findByMeetupIdAndUserId(meetupId: UUID, userId: UUID): Participant?
+
+    /** Проверяет, приглашён ли пользователь на встречу. */
     fun existsByMeetupIdAndUserId(meetupId: UUID, userId: UUID): Boolean
 }

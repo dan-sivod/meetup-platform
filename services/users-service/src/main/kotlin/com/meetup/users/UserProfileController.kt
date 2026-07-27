@@ -12,6 +12,16 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
+/**
+ * Тело запроса на частичное обновление профиля.
+ * Поля со значением null не изменяются.
+ *
+ * @property displayName новое отображаемое имя.
+ * @property bio новое описание «о себе».
+ * @property avatarUrl новая ссылка на аватар.
+ * @property timezone новый часовой пояс IANA.
+ * @property visibility новая настройка приватности.
+ */
 data class UpdateProfileRequest(
     val displayName: String? = null,
     val bio: String? = null,
@@ -20,19 +30,39 @@ data class UpdateProfileRequest(
     val visibility: Visibility? = null,
 )
 
+/**
+ * HTTP-эндпоинты чтения и редактирования профилей.
+ *
+ * @property profiles репозиторий профилей.
+ */
 @RestController
 @RequestMapping("/users")
 class UserProfileController(private val profiles: UserProfileRepository) {
 
+    /**
+     * Возвращает профиль по идентификатору.
+     *
+     * @throws ResponseStatusException 404, если профиль не найден.
+     */
     @GetMapping("/{id}")
     fun get(@PathVariable id: UUID): UserProfile =
         profiles.findById(id).orElseThrow {
             ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
         }
 
+    /** Возвращает профили пачкой — например, для списка участников встречи. */
     @GetMapping
     fun getBatch(@RequestParam ids: List<UUID>): List<UserProfile> = profiles.findAllById(ids)
 
+    /**
+     * Обновляет профиль. Редактировать можно только собственный профиль:
+     * [id] должен совпадать с [callerId] из доверенного заголовка X-User-Id.
+     *
+     * @param id идентификатор редактируемого профиля.
+     * @param callerId идентификатор вызывающего (проставляется gateway).
+     * @param request изменяемые поля; null-поля остаются как были.
+     * @throws ResponseStatusException 403 при попытке редактировать чужой профиль.
+     */
     @PutMapping("/{id}")
     fun update(
         @PathVariable id: UUID,

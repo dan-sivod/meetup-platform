@@ -10,14 +10,26 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
+/**
+ * HTTP-эндпоинты inbox-а уведомлений.
+ *
+ * @property notifications репозиторий уведомлений.
+ */
 @RestController
 @RequestMapping("/notifications")
 class NotificationController(private val notifications: NotificationRepository) {
 
+    /** Все уведомления текущего пользователя, новые первыми. */
     @GetMapping
     fun inbox(@RequestHeader("X-User-Id") userId: UUID): List<Notification> =
         notifications.findByUserIdOrderByCreatedAtDesc(userId)
 
+    /**
+     * Помечает уведомление прочитанным.
+     *
+     * @throws ResponseStatusException 404 — уведомление не найдено;
+     * 403 — уведомление адресовано другому пользователю.
+     */
     @PostMapping("/{id}/read")
     fun markRead(@PathVariable id: UUID, @RequestHeader("X-User-Id") userId: UUID): Notification {
         val notification = notifications.findById(id).orElseThrow {
@@ -30,6 +42,7 @@ class NotificationController(private val notifications: NotificationRepository) 
         return notifications.save(notification)
     }
 
+    /** Помечает все уведомления прочитанными; возвращает их количество. */
     @PostMapping("/read-all")
     fun markAllRead(@RequestHeader("X-User-Id") userId: UUID): Int {
         val unread = notifications.findByUserIdAndReadFalse(userId)

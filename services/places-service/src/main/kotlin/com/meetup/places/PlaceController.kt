@@ -21,6 +21,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/**
+ * Тело запроса на добавление места.
+ *
+ * @property name название места.
+ * @property category категория; может отсутствовать.
+ * @property address адрес; может отсутствовать.
+ * @property latitude широта в градусах.
+ * @property longitude долгота в градусах.
+ */
 data class CreatePlaceRequest(
     val name: String,
     val category: String? = null,
@@ -29,8 +38,21 @@ data class CreatePlaceRequest(
     val longitude: Double,
 )
 
+/**
+ * Элемент выдачи geo-поиска.
+ *
+ * @property place найденное место.
+ * @property distanceKm расстояние до точки поиска в километрах.
+ */
 data class NearbyPlace(val place: Place, val distanceKm: Double)
 
+/**
+ * HTTP-эндпоинты каталога мест: добавление, geo-поиск, избранное.
+ *
+ * @property places репозиторий мест.
+ * @property favorites репозиторий отметок «избранное».
+ * @property kafka продюсер событий place.created / place.favorited.
+ */
 @RestController
 @RequestMapping("/places")
 class PlaceController(
@@ -38,6 +60,10 @@ class PlaceController(
     private val favorites: PlaceFavoriteRepository,
     private val kafka: KafkaTemplate<String, Any>,
 ) {
+    /**
+     * Добавляет место в каталог и публикует place.created
+     * (search-service проиндексирует его).
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
@@ -62,12 +88,16 @@ class PlaceController(
         return place
     }
 
+    /** Возвращает место по идентификатору. */
     @GetMapping("/{id}")
     fun get(@PathVariable id: UUID): Place = find(id)
 
     /**
-     * Naive haversine scan over the catalog. In production this becomes a
-     * PostGIS/geo-index query or a call to an external Places API.
+     * Поиск мест в радиусе [radiusKm] от точки ([lat], [lon]),
+     * отсортированных по удалённости.
+     *
+     * Наивный проход по каталогу с формулой haversine; в продакшене —
+     * PostGIS/geo-индекс или внешний Places API.
      */
     @GetMapping("/nearby")
     fun nearby(
@@ -80,6 +110,12 @@ class PlaceController(
             .filter { it.distanceKm <= radiusKm }
             .sortedBy { it.distanceKm }
 
+    /**
+     * Добавляет место в избранное текущего пользователя и публикует
+     * place.favorited (сигнал для recommendations-service).
+     *
+     * @throws ResponseStatusException 409, если место уже в избранном.
+     */
     @PostMapping("/{id}/favorite")
     fun favorite(@PathVariable id: UUID, @RequestHeader("X-User-Id") userId: UUID): PlaceFavorite {
         val place = find(id)
@@ -95,14 +131,21 @@ class PlaceController(
         return favorite
     }
 
+    /** Избранные места текущего пользователя. */
     @GetMapping("/favorites")
     fun favorites(@RequestHeader("X-User-Id") userId: UUID): List<Place> =
         places.findAllById(favorites.findByUserId(userId).map { it.placeId })
 
+    /**
+     * Возвращает место по идентификатору.
+     *
+     * @throws ResponseStatusException 404, если место не найдено.
+     */
     private fun find(id: UUID): Place = places.findById(id).orElseThrow {
         ResponseStatusException(HttpStatus.NOT_FOUND, "Place not found")
     }
 
+    /** Расстояние по большому кругу между двумя координатами в километрах. */
     private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val earthRadiusKm = 6371.0
         val dLat = Math.toRadians(lat2 - lat1)
