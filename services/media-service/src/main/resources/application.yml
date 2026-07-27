@@ -1,0 +1,21 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: media-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/media_db
+    username: meetup
+    password: meetup
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+media:
+  storage-dir: ${MEDIA_STORAGE_DIR:var/media-uploads}

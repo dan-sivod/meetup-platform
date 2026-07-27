@@ -1,0 +1,9 @@
+CREATE DATABASE auth_db;
+CREATE DATABASE users_db;
+CREATE DATABASE friends_db;
+CREATE DATABASE meetups_db;
+CREATE DATABASE scheduling_db;
+CREATE DATABASE places_db;
+CREATE DATABASE chat_db;
+CREATE DATABASE notifications_db;
+CREATE DATABASE media_db;

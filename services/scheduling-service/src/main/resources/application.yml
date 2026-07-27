@@ -1,0 +1,14 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: scheduling-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/scheduling_db
+    username: meetup
+    password: meetup
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false

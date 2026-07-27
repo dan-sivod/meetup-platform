@@ -1,0 +1,59 @@
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET:dev-secret-change-me-dev-secret-change-me}
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth
+          uri: ${AUTH_URL:http://localhost:8081}
+          predicates: [ "Path=/api/auth/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: users
+          uri: ${USERS_URL:http://localhost:8082}
+          predicates: [ "Path=/api/users/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: friends
+          uri: ${FRIENDS_URL:http://localhost:8083}
+          predicates: [ "Path=/api/friendships/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: meetups
+          uri: ${MEETUPS_URL:http://localhost:8084}
+          predicates: [ "Path=/api/meetups/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: scheduling
+          uri: ${SCHEDULING_URL:http://localhost:8085}
+          predicates: [ "Path=/api/polls/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: places
+          uri: ${PLACES_URL:http://localhost:8086}
+          predicates: [ "Path=/api/places/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: chat
+          uri: ${CHAT_URL:http://localhost:8087}
+          predicates: [ "Path=/api/chat/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: chat-ws
+          uri: ${CHAT_WS_URL:ws://localhost:8087}
+          predicates: [ "Path=/ws/**" ]
+        - id: notifications
+          uri: ${NOTIFICATIONS_URL:http://localhost:8088}
+          predicates: [ "Path=/api/notifications/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: media
+          uri: ${MEDIA_URL:http://localhost:8089}
+          predicates: [ "Path=/api/media/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: recommendations
+          uri: ${RECO_URL:http://localhost:8090}
+          predicates: [ "Path=/api/recommendations/**" ]
+          filters: [ "StripPrefix=1" ]
+        - id: search
+          uri: ${SEARCH_URL:http://localhost:8091}
+          predicates: [ "Path=/api/search/**" ]
+          filters: [ "StripPrefix=1" ]
