@@ -1,0 +1,59 @@
+---
+description: Соглашения application.yml сервисов - порты, БД, Kafka, переменные окружения
+globs: services/**/resources/application.yml
+alwaysApply: false
+---
+
+# Конфигурация сервисов
+
+Каждый `application.yml` содержит ровно то, что нужно сервису: сервис без событий
+не описывает Kafka, сервис с in-memory проекцией — datasource.
+
+## Обязательные блоки
+
+```yaml
+server:
+  port: 8084                    # уникальный порт из карты сервисов
+
+spring:
+  application:
+    name: meetups-service       # = имя модуля, = consumer group-id
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/meetups_db
+    username: meetup
+    password: meetup
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+```
+
+- Имя БД — `<домен>_db`, создаётся в `infra/postgres/init.sql`.
+- Всё, что меняется между стендами, читается как `${VAR:локальный-дефолт}`:
+  `POSTGRES_HOST`, `KAFKA_BOOTSTRAP`, `JWT_SECRET`, `*_BASE_URL`, `MEDIA_STORAGE_DIR`.
+  Дефолт всегда рабочий для `docker compose up -d` + `bootRun`.
+- Пароли БД и `JWT_SECRET` в repo — только dev-значения; продовые приходят из окружения.
+
+## Kafka
+
+Блок `producer` (`StringSerializer` + `JsonSerializer`) — если сервис публикует
+события; `consumer` — если подписывается. Ничего лишнего «на будущее».
+
+```yaml
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: meetups-service          # имя сервиса, не имя топика
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.meetup.common.events
+```
+
+Базовые адреса синхронных клиентов — в своей секции `clients`
+(`friends-base-url: ${FRIENDS_BASE_URL:http://localhost:8083}`), бин `RestClient`
+объявляется в классе `*Application`.
+
+Новый порт и маршрут обязательно добавляются в `gateway/application.yml`
+и в таблицы сервисов в `README.md` и `docs/MASTER-SPEC.md`.

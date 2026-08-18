@@ -1,0 +1,46 @@
+---
+description: Соглашения сборки Gradle - convention-плагины, версии зависимостей, структура модулей
+globs: **/*.gradle.kts
+alwaysApply: false
+---
+
+# Сборка
+
+## Convention-плагины
+
+Вся общая настройка живёт в `buildSrc/src/main/kotlin`:
+
+- `meetup-kotlin` — JDK 21 toolchain, `-Xjsr305=strict`, JUnit Platform, `kotlin-test`.
+- `meetup-service` — `meetup-kotlin` + Spring Boot, `kotlin-spring`, dependency-management,
+  actuator, `jackson-module-kotlin`, `kotlin-reflect`, `spring-boot-starter-test`.
+
+Модуль подключает плагин и объявляет только своё:
+
+```kotlin
+plugins {
+    id("meetup-service")
+    id("org.jetbrains.kotlin.plugin.jpa")   // только если есть @Entity
+}
+
+dependencies {
+    implementation(project(":common"))
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.kafka:spring-kafka")
+    runtimeOnly("org.postgresql:postgresql")
+}
+```
+
+## Правила
+
+- Версии Spring-стартеров не указываются — их задаёт BOM из dependency-management.
+  Явная версия допустима только для внешних библиотек (`jjwt` 0.12.6) и должна
+  совпадать во всех модулях.
+- Версии плагинов и Spring Boot меняются только в `buildSrc/build.gradle.kts`.
+- Драйвер БД — `runtimeOnly`, реализации `jjwt-impl`/`jjwt-jackson` — `runtimeOnly`.
+- Общий код — только через `implementation(project(":common"))`. Зависимости
+  между сервисными модулями запрещены: интеграция идёт по HTTP или через Kafka.
+- Новый модуль добавляется в `settings.gradle.kts` как `"services:<имя>-service"`.
+- Репозиторий зависимостей — `https://repo1.maven.org/maven2` (задан в
+  convention-плагине); `mavenCentral()` в модулях не добавляем.
+- Общая настройка не дублируется в модулях — она переносится в convention-плагин.

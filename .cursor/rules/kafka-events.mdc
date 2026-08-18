@@ -1,0 +1,53 @@
+---
+description: Контракты доменных событий Kafka, публикация и идемпотентные подписчики
+globs: common/**/*.kt,services/**/*.kt
+alwaysApply: false
+---
+
+# Доменные события
+
+## Контракты
+
+- Событие — `data class` в `common/.../events/DomainEvents.kt`, имя в past tense
+  (`MeetupConfirmed`), последнее поле всегда `val occurredAt: Instant = Instant.now()`.
+- Имя топика — константа в `Topics`, формат `<агрегат>.<событие>` (`meetup.confirmed`).
+  Строковых литералов топиков в сервисах быть не должно.
+- Событие самодостаточно: несёт всё, что нужно подписчику, чтобы не ходить
+  за данными обратно (`MeetupConfirmed` везёт `title`, `startsAt`, `participantIds`).
+- Эволюция только совместимая: добавлять поля с дефолтом, не переименовывать
+  и не удалять существующие. Несовместимое изменение — новый топик.
+
+## Публикация
+
+Ключ сообщения — id агрегата, чтобы события одной сущности шли в порядке:
+
+```kotlin
+kafka.send(
+    Topics.MEETUP_CONFIRMED,
+    meetupId.toString(),
+    MeetupConfirmed(meetupId = meetupId, hostId = meetup.hostId, /* ... */),
+)
+```
+
+Публикуем после успешной записи в свою БД. Transactional outbox не реализован —
+считаем доставку at-most-once и не строим на событиях денежных/юридических гарантий.
+
+## Подписка
+
+- `@KafkaListener(topics = [Topics.X])` в `@Component`/`@Service`, один метод на топик,
+  имя `onXxx`.
+- Обработчик обязан быть идемпотентным — событие может прийти повторно:
+
+```kotlin
+@KafkaListener(topics = [Topics.USER_REGISTERED])
+fun onUserRegistered(event: UserRegistered) {
+    if (profiles.existsById(event.userId)) return
+    profiles.save(UserProfile(id = event.userId, /* ... */))
+}
+```
+
+- `group-id` в `application.yml` = имя сервиса; `auto-offset-reset: earliest`
+  (сервисы с in-memory проекциями восстанавливаются перечитыванием топиков).
+- Десериализация — `JsonDeserializer` с `spring.json.trusted.packages: com.meetup.common.events`.
+- Подписчик не вызывает синхронно сервис-источник и не публикует событие в ответ
+  на своё же событие (циклы запрещены).
