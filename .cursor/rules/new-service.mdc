@@ -1,0 +1,34 @@
+---
+description: Чек-лист добавления нового сервиса или нового доменного события в платформу
+alwaysApply: false
+---
+
+# Новый сервис
+
+1. `settings.gradle.kts` — добавить `"services:<домен>-service"`.
+2. `services/<домен>-service/build.gradle.kts` — плагин `meetup-service`
+   (+ `kotlin.plugin.jpa`, если есть сущности), `project(":common")`, нужные стартеры.
+3. Пакет `com.meetup.<домен>`, файлы плоско в одном пакете:
+   `<Домен>Application.kt` (класс + `fun main`), `<Агрегат>.kt` (сущности + репозитории),
+   `<Агрегат>Controller.kt`, `<Агрегат>Service.kt` — только если логика не влезает в контроллер.
+4. `application.yml` — свободный порт (следующий за 8091), `spring.application.name`,
+   datasource `<домен>_db`, блоки Kafka по факту использования.
+5. `infra/postgres/init.sql` — `CREATE DATABASE <домен>_db;` (если нужна БД).
+6. `gateway/application.yml` — маршрут `id`, `uri: ${<ДОМЕН>_URL:http://localhost:<порт>}`,
+   `predicates: [ "Path=/api/<путь>/**" ]`, `filters: [ "StripPrefix=1" ]`.
+7. `README.md` — строка в таблице сервисов; `docs/MASTER-SPEC.md` — раздел сервиса
+   (владеемые данные, HTTP API, события, инварианты, конфигурация).
+
+# Новое событие
+
+1. `common/.../events/DomainEvents.kt` — `data class` с `occurredAt`, KDoc на `@property`.
+2. `common/.../events/Topics.kt` — константа `<АГРЕГАТ>_<СОБЫТИЕ>` со значением
+   `<агрегат>.<событие>`.
+3. Продюсер: `kafka.send(Topics.X, aggregateId.toString(), Event(...))` после записи в БД.
+4. Каждый подписчик: `@KafkaListener` + идемпотентность + блок `consumer`
+   в своём `application.yml`.
+5. `docs/MASTER-SPEC.md` — строка в каталоге событий (продюсер, подписчики, payload),
+   `README.md` — перечисление топиков.
+
+Топики создаются автоматически (`KAFKA_AUTO_CREATE_TOPICS_ENABLE: true`),
+отдельного шага в `docker-compose.yml` не требуется.

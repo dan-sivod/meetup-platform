@@ -1,0 +1,50 @@
+---
+description: Соглашения JPA-сущностей, репозиториев и транзакций в сервисах
+globs: services/**/*.kt
+alwaysApply: false
+---
+
+# Персистентность
+
+## Сущности
+
+- Обычный `class` (не `data class`), поля в конструкторе, файл называется по
+  агрегату (`Meetup.kt`, `Place.kt`, `ChatModel.kt` для пары связанных сущностей).
+- `@Id val id: UUID = UUID.randomUUID()` — идентификатор генерирует приложение,
+  БД-последовательности не используем. Исключение: `UserProfile.id` приходит
+  из события регистрации.
+- Время — только `Instant` в UTC, поля `createdAt`/`sentAt` неизменяемые (`val`).
+- Изменяемые поля — `var`, остальные `val`.
+- Перечисления — `@Enumerated(EnumType.STRING)`, никогда ordinal.
+- Обязательные поля — `@Column(nullable = false)`; уникальность пары — через
+  `@Table(uniqueConstraints = [UniqueConstraint(columnNames = ["meetupId", "userId"])])`.
+- Ссылки на чужие агрегаты — «сырой» `UUID`. `@ManyToOne`/`@OneToMany` между
+  агрегатами не используем; связи разрешаются запросом по id.
+
+```kotlin
+@Entity
+@Table(name = "participants", uniqueConstraints = [UniqueConstraint(columnNames = ["meetupId", "userId"])])
+class Participant(
+    @Id val id: UUID = UUID.randomUUID(),
+    @Column(nullable = false) val meetupId: UUID,
+    @Enumerated(EnumType.STRING) @Column(nullable = false) var rsvp: RsvpStatus = RsvpStatus.INVITED,
+)
+```
+
+## Репозитории
+
+- `interface XRepository : JpaRepository<X, UUID>` в том же файле, что сущность.
+- Сначала derived-методы (`findByMeetupIdAndUserId`, `existsByPlaceIdAndUserId`),
+  `@Query` — только для того, что не выражается именем.
+- Списки с пользовательским `limit` принимают `Pageable`, а не грузят всё в память.
+- Подсчёты и агрегации — одним запросом (`findByOptionIdIn(...).groupBy { }`),
+  без N+1 в цикле.
+
+## Транзакции
+
+- Операции с несколькими записями — `@Transactional` в `@Service`
+  (`MeetupService.create`, `PollController.unvote` для `deleteBy...`).
+- `open-in-view: false` во всех сервисах: ленивые связи вне транзакции недоступны —
+  собирай данные до выхода из сервисного метода.
+- Схема поднимается `ddl-auto: update` (демо-стенд). Изменение сущности не требует
+  миграции, но не удаляй и не переименовывай колонки — Hibernate их не подчистит.

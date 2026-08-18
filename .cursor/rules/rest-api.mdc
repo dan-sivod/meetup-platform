@@ -1,0 +1,53 @@
+---
+description: Соглашения REST-контроллеров сервисов: маршруты, идентичность вызывающего, коды ошибок, DTO
+globs: services/**/*Controller.kt
+alwaysApply: false
+---
+
+# REST-контроллеры
+
+## Маршруты
+
+- `@RequestMapping` задаёт путь **без** префикса `/api`: gateway маршрутизирует
+  `/api/meetups/**` и срезает первый сегмент (`StripPrefix=1`).
+  Публичный `/api/meetups/{id}` = внутренний `/meetups/{id}`.
+- Каждый новый корневой путь регистрируется маршрутом в
+  `services/gateway/src/main/resources/application.yml`, иначе он недоступен клиентам.
+
+## Идентичность
+
+Личность — только из доверенного заголовка, никогда из тела:
+
+```kotlin
+// ✅ так
+fun create(@RequestHeader("X-User-Id") userId: UUID, @RequestBody request: CreateMeetupRequest)
+
+// ❌ нельзя: клиент подменит автора
+data class CreateMeetupRequest(val hostId: UUID, ...)
+```
+
+Право на чужой объект проверяется явно: сравнение с `X-User-Id` → 403
+(`UserProfileController.update`, `NotificationController.markRead`).
+
+## Ошибки
+
+Только `ResponseStatusException` с коротким английским сообщением; глобального
+`@ControllerAdvice` в проекте нет. Единая семантика кодов:
+
+| Код | Когда |
+|---|---|
+| 400 | невалидный ввод, нарушенная предпосылка запроса |
+| 401 | выдаёт только gateway |
+| 403 | вызывающий не владелец / не host / не друг / не приглашён |
+| 404 | сущность не найдена |
+| 409 | конфликт состояния: дубликат, отменено, закрыто |
+| 410 | метаданные есть, содержимое утрачено |
+
+## DTO и ответы
+
+- Запросы/ответы — `data class` в файле контроллера, рядом с использованием.
+- Сущности JPA отдаются как есть; отдельный слой response-моделей не вводим.
+- Создание ресурса — `@ResponseStatus(HttpStatus.CREATED)`.
+- Параметр `limit` всегда ограничивается: `limit.coerceIn(1, 200)`.
+- Бизнес-логика живёт в контроллере, пока она тривиальна (CRUD + одна проверка);
+  многошаговые инварианты выносятся в `@Service` (`MeetupService`, `ChatService`).
